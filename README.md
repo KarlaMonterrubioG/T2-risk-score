@@ -6,8 +6,9 @@ This repository contains supplementary material for the article: "Improving risk
   - Data pre-processing for derivation cohort 
   - Cox proportional hazards model for primary and secondary outcomes
   - Sensitivity analysis for missing values and 30 days mortality
-- External validation for single centre cohort
-- External validation for multi-centre cohort
+- Validation code:
+  - External validation for single centre cohort
+  - External validation for multi-centre cohort
 - Troponin substudy analysis
 - R Shiny app
 
