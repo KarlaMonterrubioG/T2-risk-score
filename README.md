@@ -13,7 +13,8 @@ This repository contains supplementary material for the article: "Improving risk
 
 
 ## Code Authors
-   Karla Monterrubio-Gómez PhD and Caelan Taggart MD.
+   Karla Monterrubio-Gómez PhD, Caelan Taggart MD, Jasper Boeddinghaus MD, and Catalina Vallejos PhD.
+
 
 
 ----
