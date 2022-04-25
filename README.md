@@ -9,6 +9,7 @@ This repository contains supplementary material for the article: "Improving risk
 - External validation for single centre cohort
 - External validation for multi-centre cohort
 - Troponin substudy analysis
+- R Shiny app
 
 
 ## Code Authors
