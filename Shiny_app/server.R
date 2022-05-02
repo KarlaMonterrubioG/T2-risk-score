@@ -77,7 +77,7 @@ shinyServer(function(input, output){
       Age_Index = as.numeric(input$Age),
       HeartRate = as.numeric(input$HeartRate),
       logtroponin <- ifelse(input$TypeTrop=="Troponin I", log(as.numeric(input$PeakTroponin)), 
-                                           (0.04585+1.23005*log(as.numeric(input$PeakTroponin)))),
+                                           (-0.36759+1.35335*log(as.numeric(input$PeakTroponin)))),
       
       eGFR.computed = as.numeric(input$eGFR),
       ECG = input$MyocardialIschaemia,
