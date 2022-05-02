@@ -1,0 +1,199 @@
+---
+title: "Supplementary Troponin Analysis"
+author:  <p style="font-size:11pt; color:gray"> Karla Monterrubio Gómez and Catalina A. Vallejos</p>
+date: ' '
+output:
+  pdf_document: default
+  html_document:
+    number_sections: yes
+subtitle: <p style="font-size:14pt"> Improving risk stratification for
+  patients with type 2 myocardial infarction </p>
+bibliography: biblio.bib
+---
+
+```{r setup, include=FALSE}
+library(utils)
+library(graphics)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+&nbsp;
+
+The objective of this analysis is to construct a linear regression model, which permits to predict log troponin I from log tropinin T. Such model, will permit to employ the proposed T2 risk score when we only have access to troponin T. 
+
+# Data pre-processing
+
+The data here used corresponds to patients with suspected acute coronary syndrome that
+were recruited from the Emergency Department of the Royal Infirmary of Edinburgh, a tertiary care hospital in Scotland, between 1 June 2013 and 31 March 2017 into a substudy of the HighSTEACS trial. All patients in whom the attending
+clinician requested cardiac troponin for suspected acute coronary syndrome were eligible. We did not enrol patients with ST-segment elevation myocardial infarction, those unable to provide consent or those from outside our region to ensure complete follow-up. Blood samples were obtained at presentation and at 6 \– 12 hours as part of routine clinical care, with surplus serum or lithium-heparin plasma samples collected. Patients provided written
+informed consent for additional sampling at 1 or
+3 hours. 
+
+The dataset contains two readings, one of troponin I and  one of troponin T, for 1869 patients. In addition, the dataset contains an adjudication code, where:
+
+- adj = 1 corresponds to  Type 1 Myocardial infarction
+- adj = 2 corresponds to  Type 2 Myocardial infarction
+- adj = 3 corresponds to  Myocardial injury
+- adj = 9 corresponds to  NA
+- adj = NA corresponds to No injury
+
+
+We load the dataset and make the above adjudication codes explicit:
+```{r, message=FALSE}
+library(readr)
+
+substudy <-  as.data.frame(read_csv("~/Documents/Postdoc/DEMAND/highsteacs_substudy_troponin.csv"))
+
+str(substudy)
+
+
+substudy$adj[substudy$adj == 1] <- "Type 1 MI" 
+substudy$adj[substudy$adj == 2] <- "Type 2 MI" 
+substudy$adj[substudy$adj == 3] <- "Myocardial injury" 
+substudy$adj[substudy$adj == 9] <- NA 
+substudy$adj[is.na(substudy$adj)==TRUE] <- "No injury"
+
+
+```
+
+
+
+
+Because our aim is to model the relationship between tropinin I and tropinin T. Below, we re-arrange the data by stacking the two available tropinin readings. In addition, we remove rows of the stacked dataset where at leat one of the troponin reading were unvailable.
+
+```{r}
+stacked_data <- data.frame(cbind( tni = c(substudy$tni1_result, substudy$tni2_result), 
+                               tnt = c(substudy$tnt1_result, substudy$tnt2_result)),
+                               adj = c(substudy$adj, substudy$adj))
+
+#remove NAs
+NA.I <- which(is.na(stacked_data$tni)==TRUE)
+NA.T <- which(is.na(stacked_data$tnt)==TRUE)
+stacked_data <- stacked_data[-c(unique(c(NA.I, NA.T))),]
+row.names(stacked_data) <- NULL
+
+#Number of available readings
+nrow(stacked_data)
+
+```
+
+
+We further remove any troponin readings above and below the limit of detection of the assays employed [@assays]
+
+- Lower limit of detection for troponin I is 3.5 ng/L and for troponin T 6.0 ng/L.
+- Upper limit of detection for troponin I is 50,000 ng/L and for troponin T 10,000 ng/L.
+
+```{r}
+below_limit <- unique(c(which(stacked_data$tni <= 3.5), which(stacked_data$tnt <= 6)))
+above_limit <- unique(c(which(stacked_data$tni >= 50000), which(stacked_data$tnt >= 10000)))
+
+data_LOD <- stacked_data[-c(below_limit, above_limit),]
+row.names(data_LOD) <- NULL
+nrow(data_LOD)
+```
+
+Furthermore, as our objective is to model the relationship between troponin I and T in populations with MI, we remove readings corresponding to those subjects that have an adjudicated diagnose of no injury.
+
+```{r}
+data_LOD_subset <- data_LOD[-which(data_LOD$adj == "No injury"),]
+row.names(data_LOD_subset) <- NULL
+
+#Number of available troponin readings
+nrow(data_LOD_subset)
+```
+
+Finally, we compute the logarithm of both troponin I and T and produce a scatter plot of the data:
+
+```{r, fig.dim=c(6,4)}
+data_LOD_subset$log.TropI <- log(data_LOD_subset$tni)
+data_LOD_subset$log.TropT <- log(data_LOD_subset$tnt)
+
+par(mar = c(4, 4, 2, .1))
+plot(data_LOD_subset$log.TropT, data_LOD_subset$log.TropI, 
+     pch = 20,
+     main = "log(Trop T) vs log(Trop I)",
+     xlab = "log troponin T", ylab = "log troponin I")
+```
+
+
+# Model fitting
+
+We fit a linear regression model:
+```{r}
+trop.fit <- lm( log.TropI ~ log.TropT, data = data_LOD_subset)
+summary(trop.fit)
+```
+
+And produce residuals plots:
+```{r, fig.dim=c(10,8)}
+par(mfrow=c(2,2))
+plot(trop.fit)
+```
+
+From the plots above, we remove all strong outliers, which are not inline with the overall trend in the data. The removed observations ar shown below and marked in red in the plot:
+```{r}
+
+data_LOD_subset[c(652,313,275,631,635,438,447,582, 461,361,646, 437,112,51),]
+data_LOD_subset2 <-data_LOD_subset[-c(652,313,275,631,635,438,447,582, 461,361,646, 437,112,51),]
+row.names(data_LOD_subset2) <- NULL
+outliers<-data_LOD_subset[c(652,313,275,631,635,438,447,582, 461,361,646, 437,112,51),]
+plot(data_LOD_subset$log.TropT, data_LOD_subset$log.TropI, 
+     pch = 20,
+     main = "log(Trop T) vs log(Trop I)",
+     xlab = "log troponin T", ylab = "log troponin I")
+points(outliers$log.TropT, outliers$log.TropI, col="red")
+
+```
+
+We now re-fit the linear regression model on the reduced dataset and repeat the residual analysis.
+```{r, fig.dim=c(10,8)}
+trop.fit <- lm( log.TropI ~ log.TropT, data = data_LOD_subset2)
+summary(trop.fit)
+
+par(mfrow=c(2,2))
+plot(trop.fit)
+```
+
+ 
+Finally, we plot the data along with the fitted regression line, and estimated regression equation.
+```{r, message = FALSE, fig.dim=c(6,4)}
+library(ggplot2)
+library(ggpubr)
+
+ggplot(data_LOD_subset2, aes(x = log.TropT, y = log.TropI))+ geom_point() + 
+  geom_smooth(method="lm", col="black") + 
+  stat_regline_equation(label.x = 3, label.y = 9)
+
+```
+
+
+# Analysis of predicted values
+
+We compute the predicted log troponin I in our dataset. From this prediction, we can further calculate what will be the difference in the linear predictor of our risk score from using the predicted values rather than the observed ones.
+
+```{r, fig.dim=c(6,4)}
+
+# Compute predicted log troponin I:
+pred_logI <- predict.lm(trop.fit, data_LOD_subset2)
+
+# Difference in linear predictor
+dif_LP <- 0.11030707*(data_LOD_subset2$log.TropI - pred_logI)
+```
+
+We produce a scatter plot of the observed log troponin I vs the differences computed above. 
+```{r, fig.dim=c(6,5)}
+plot(data_LOD_subset2$log.TropI, dif_LP, 
+     xlab="log Trop I", ylab = "Difference in linear predictor" )
+abline(h = 0)
+```
+
+Finally, from the plot above, we expect to slightly underestimate the risk for subjects with small values of troponin I (i.e. $\text{trop I} < 20$) as a result of the negative differences in the residuals. In addition, we expect a slight overestimation of the risk for large values in log trop I ( i.e. $\text{trop I}> 670$).
+
+
+
+# Session info
+```{r, echo=FALSE}
+sessionInfo()
+```
+
+#References
