@@ -1,6 +1,6 @@
 #Author: Jasper Boedeinghaus and Caelan Taggart
 #Date 11/04/2022
-#Validation for DEMAND-MI Score  
+#Validation for T2-risk Score in multi-centre, international cohort
 
 
 library(gtsummary)
@@ -26,13 +26,7 @@ update.packages("fastmap")
 # Load dataframes
 setwd("~/PhD/Demand Score/Validation data")
 df<-read_sav("./DEMAND.sav",encoding = "latin1")
-#df = dataframe containing variables in dictionary 
 
-#change !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#rand<-sample(1:nrow(df), 100)
-#df$PrevHFHospitalisation<-""
-#df$PrevHFHospitalisation[rand] <- "yes"
-#df$PrevHFHospitalisation[-rand] <- "no"
 
 #basel conversion
 df<-df %>% mutate_if(is.labelled,to_character)
@@ -77,12 +71,6 @@ df = df %>%
   mutate(Anaemia = ifelse(Sex=="female", ifelse(Haemoglobin <120 , "Yes" , "No"), 
                           ifelse(Haemoglobin <130, "Yes", "No")))
 
-#log troponin
-#df$logtroponin = log(df$`Peak hs-cTnI`) 
-#df<-df %>% select(-logtroponin)
-#df<-df %>% rename(logtroponin=logtroponinLN)
-
-
 view(df)
 
 #Create outcome columns and dates
@@ -95,9 +83,6 @@ df$MI_days = as.numeric(round(difftime(df$AMI_date,
 df$MI_days[is.na(df$MI_days)==TRUE] = 365
 
 #Redefinition of AMI without index events. 
-# df<-df %>% 
- # mutate(AMI = case_when((MI_days > 0 & AMI == "Yes" ) ~ "Yes", TRUE ~ "No"))
-
 df = df %>% 
   mutate(secout = case_when((AMI == "Yes"  | CV_death == "Yes") ~ 1 , TRUE ~ 0))
 
@@ -123,18 +108,10 @@ view(df)
 df = df %>% 
   mutate(primout = case_when((AMI == "Yes"  | dead == "Yes") ~ 1 , TRUE ~ 0))
 
-#df$daysdeath = df$days.to.death
-
 df$daysdeath[is.na(df$daysdeath) == TRUE] = 365
 
 
 #Censor everything above 365 for primary outcome as well. So if had an event after 365 days then primout is 0
-
-#old position code
-#position2 <- which(df$daysdeath>365)
-#df$daysdeath[position2] <- 365
-#df$second.out[position2] <- 0
-
 df$primout_days = pmin(df$MI_days, df$daysdeath)
 
 position2 <- which(df$primout_days>365)
@@ -152,10 +129,7 @@ df$secout = ifelse(df$secout == 1 & df$secout_days >=365, 0,
                            ifelse(df$secout == 1 & df$secout_days <365, 1, 0))
 
 view(df)
-#library(openxlsx)
-#write.xlsx(df,"./output/df.xlsx",overwrite = T)
-# Now need to make a linear predictor column in this dataset using the equation 
-# New equation inputted with the betas for MI or CV death (second outcome) 
+
 
 df$linearpredictor <- as.double(NA)
 df$linearpredictor <- (-0.52936936 - 0.0047846242 * (df$Age_Index) + 9.4179917e-06 * pmax(df$Age_Index -48, 0)^3 + 
@@ -172,13 +146,12 @@ df$linearpredictor <- (-0.52936936 - 0.0047846242 * (df$Age_Index) + 9.4179917e-
 
 # survival 365 for this outcome
 s0365 = 0.8892512
-#s0365 =1-sum(df$secout)/length(df$secout)
 
 df$prob.secout = 1-s0365^exp(df$linearpredictor)
 
 summary(df$prob.secout)
 
-#New model - this is just an alternative check of discrimination
+#New model - this is just an alternative check of validation using calibration slope
 ddist <- datadist(df)
 options(datadist='ddist')
 cox_external<- cph(Surv(secout_days, secout)~ linearpredictor, data=df)
@@ -202,7 +175,6 @@ df$linearpredictor2 <-  (-2.7144998 + 0.028597071 * (df$Age_Index) - 6.0631548e-
                                   0.0062885784 * df$HeartRate - 2.057656e-06 * pmax(df$HeartRate - 65, 0)^3 + 3.4697729e-06 * pmax(df$HeartRate - 100, 0)^3 - 1.4121169e-06 * pmax(df$HeartRate - 151, 0)^3)
 
 # 365 day survival for this outcome
-#s0365.2 = 1-sum(df$primout)/length(df$primout)
 s0365.2 = 0.776024
 
 df$prob.primout = 1-s0365.2^exp(df$linearpredictor2)
@@ -215,13 +187,10 @@ options(datadist='ddist')
 cox_external2<- cph(Surv(primout_days, primout)~ linearpredictor2, data=df) 
 cox_external2
 
-#checking distrobution with histogram
+#checking distribution with histogram
 hist(df$linearpredictor2, breaks = 100)
 
 #AUC curve for new model for second outcome (MI or CV death)
-#complete_data = df
-#complete_data$cox1 = predictrms(cox_external, data = complete_data)
-
 df$secout = as.factor(df$secout)
 
 roc1= roc(df$secout, df$prob.secout, auc.polygon = TRUE, 
@@ -255,31 +224,6 @@ view(df)
 plot.roc(roc1, asp = NA, legacy.axes = TRUE, col="#00a087ff", pch=21, print.auc = TRUE, ylim = c(0,100)) 
 plot.roc(roc2, asp = NA, legacy.axes = TRUE, col="darkblue", pch=21, print.auc = TRUE, ylim = c(0,100), (add = TRUE))
 
-#double ROC graph
-#png("./output/roc_secout.png", width = 1500, height = 1500,res=250)
-#plot.roc(roc1, asp=NA, legacy.axes = TRUE, lwd = 2.5, type = "l", col="#00a087ff", print.auc = TRUE, ci = TRUE, pch=200)
-#dev.off()
-
-# svg("./output/roc_secout.svg", width = 1500, height = 1500,)
-# plot.roc(roc1, asp=NA, legacy.axes = TRUE, lwd = 2.5, type = "l", col="#00a087ff", print.auc = TRUE, ci = TRUE, pch=200)
-# dev.off()
-
-#png("./output/roc_primout.png", width = 1500, height = 1500,res=250)
-#plot.roc(roc2, asp=NA, legacy.axes = TRUE, lwd = 2.5, pch=21, type = "l", col = "#3c588f", ci = TRUE, print.auc = TRUE, ylim = c(0,100))
-#dev.off()
-
-#df<-data.frame(secout_sens=roc1$sensitivities,secout_spec=roc1$specificities,
- #          primout_sens=roc2$sensitivities,primout_spec=roc2$specificities)
-
-#write.xlsx(df,"./output/sens_spec.xlsx")
-# svg("./output/roc_primout.svg", width = 1500, height = 1500)
-# plot.roc(roc2, asp=NA, legacy.axes = TRUE, lwd = 2.5, pch=21, type = "l", col = "#3c588f", ci = TRUE, print.auc = TRUE, ylim = c(0,100))
-# dev.off()
-
-# png("./output/roc_primout_secout.png", width = 1500, height = 1500,res=250)
-# plot.roc(roc1, asp=NA, legacy.axes = TRUE, lwd = 2.5, type = "l", col="#00a087ff", print.auc = TRUE, ci = TRUE, pch=200)
-# plot.roc(roc2, asp=NA, legacy.axes = TRUE,add=T, lwd = 2.5, pch=21, type = "l", col = "#3c588f", ci = TRUE, print.auc = TRUE, ylim = c(0,100))
-# dev.off()
 
 # exploratory code for cv death, death and MI at one year
 
@@ -299,9 +243,6 @@ df = df %>%
 table(df$dead1y)
 
 #CIF code for Jasper 
-
-#extra package needed
-
 install.packages("survminer")
 library(survminer)
 
@@ -311,7 +252,7 @@ library(survminer)
 summary(df$prob.primout)
 
 # Define your risk groups around these values with the lower quartile of risk being "low" and the higest quartile of risk being "high"
-# With the middle 50% being intermediate. Just delete txt and insert values where indicated. 
+# With the middle 50% being intermediate.  
 
 df$riskgroup = ifelse(df$prob.primout <= 0.13
                         , "Low",
@@ -351,7 +292,7 @@ table(df$AMI)
 table(df$primout)
 table(df$secout)
 
-#Landmark analysis 
+#Sensitivity analysis 
 
 df30 = df %>% 
   filter(primout_days > 30 & primout_days <365 | primout == 0 )
@@ -409,7 +350,7 @@ calPlot(df_spline$prob.primout.surv,
         ylim=c(.10,1),
         col = "#3c588f")
 
-# KM prime outcome
+# Prime outcome discrete
 calPlot(df_spline$prob.primout.surv,
         time=365, Surv(primout_days,primout)~ Age_Index + ageprime + ageprime2 + eGFR.computed + eGFRprime + logtroponinLN + 
           Anaemia + `STT-deviation on ECG` + PrevHFHospitalisation + 
@@ -434,7 +375,7 @@ calPlot(df_spline$prob.secout.surv,
         ylim=c(.10,1),
         col = "green")
 
-# KM second outcome
+# Second outcome binning
 calPlot(df_spline$prob.secout.surv,
         time=365, Surv(primout_days,primout)~ Age_Index + ageprime + ageprime2 + eGFR.computed + eGFRprime + logtroponinLN + 
           Anaemia + `STT-deviation on ECG` + PrevHFHospitalisation + 
@@ -444,7 +385,7 @@ calPlot(df_spline$prob.secout.surv,
         ylim=c(.10,1),
         col = "green")
 
-# combined KM
+# combined plots
 calPlot(df_spline$prob.secout.surv,
         time=365, Surv(primout_days,primout)~ Age_Index + ageprime + ageprime2 + eGFR.computed + eGFRprime + logtroponinLN + 
           Anaemia + `STT-deviation on ECG` + PrevHFHospitalisation + 
