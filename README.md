@@ -24,7 +24,7 @@ This repository contains supplementary material for the article: "Improving risk
 
 
 
-###### _Note: Due to our governance processes were are not able to share the raw data here employed._
+###### _Note: Due to our governance processes we are not able to share the raw data here employed._
 
 
 
